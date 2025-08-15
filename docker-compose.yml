@@ -1,0 +1,63 @@
+version: '3.7'
+
+services:
+  postgres:
+    image: postgres:13
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: stocks
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  airflow-init:
+    image: apache/airflow:2.8.1
+    environment:
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://postgres:postgres@postgres:5432/stocks
+      ALPHAVANTAGE_API_KEY: ${ALPHAVANTAGE_API_KEY}
+      STOCK_SYMBOL: ${STOCK_SYMBOL}
+    depends_on:
+      - postgres
+    volumes:
+      - ./dags:/opt/airflow/dags
+    entrypoint: >
+      bash -c "airflow db init && airflow users create --username airflow --password airflow --firstname Admin --lastname User --role Admin --email admin@example.com"
+
+  airflow-webserver:
+    image: apache/airflow:2.8.1
+    environment:
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://postgres:postgres@postgres:5432/stocks
+      ALPHAVANTAGE_API_KEY: ${ALPHAVANTAGE_API_KEY}
+      STOCK_SYMBOL: ${STOCK_SYMBOL}
+      _AIRFLOW_WWW_USER_USERNAME: airflow
+      _AIRFLOW_WWW_USER_PASSWORD: airflow
+    depends_on:
+      - postgres
+      - airflow-init
+    volumes:
+      - ./dags:/opt/airflow/dags
+    ports:
+      - "8080:8080"
+    command: webserver
+
+  airflow-scheduler:
+    image: apache/airflow:2.8.1
+    environment:
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://postgres:postgres@postgres:5432/stocks
+      ALPHAVANTAGE_API_KEY: ${ALPHAVANTAGE_API_KEY}
+      STOCK_SYMBOL: ${STOCK_SYMBOL}
+    depends_on:
+      - postgres
+      - airflow-webserver
+      - airflow-init
+    volumes:
+      - ./dags:/opt/airflow/dags
+    command: scheduler
+
+volumes:
+  pgdata:
